@@ -32,7 +32,7 @@
 git clone
 cd prep-ai
 
-### 2. Backend Setup
+##### 2. Backend Setup
 cd backend
 python -m venv venv
 source venv/bin/activate  # Windows: venv\Scripts\activate
