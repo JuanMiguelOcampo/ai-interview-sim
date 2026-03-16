@@ -31,19 +31,38 @@ interface FollowUpTurn {
 }
 
 // ──────────────────────────────────────────────────────────────
-// Constants
+// Constants & Tracks
 // ──────────────────────────────────────────────────────────────
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
-const QUESTION_BANK = [
-    "Tell me about a time you had to manage conflicting priorities on a technical project.",
-    "Describe a situation where you had to learn a new technology or tool quickly.",
-    "Tell me about a time you disagreed with a team member. How did you resolve it?",
-    "Describe your most challenging technical project. What made it difficult?",
-    "Tell me about a time you failed or made a significant mistake. What did you learn?",
-];
+const INTERVIEW_TRACKS = {
+    "Behavioral": [
+        "Tell me about a time you had to manage conflicting priorities on a technical project.",
+        "Describe a situation where you had to learn a new technology or tool quickly.",
+        "Tell me about a time you disagreed with a team member. How did you resolve it?",
+        "Describe your most challenging technical project. What made it difficult?",
+        "Tell me about a time you failed or made a significant mistake. What did you learn?"
+    ],
+    "Computer Engineering": [
+        "Walk me through how you would design a system that integrates a microcontroller, like an Arduino, with an FPGA.",
+        "Describe a time you had to troubleshoot a complex timing issue in VHDL or Verilog. What was your approach?",
+        "Explain the process of handling hardware interrupts on a microprocessor architecture like the 8086.",
+        "Tell me about a time you had to optimize assembly code for a system with strict memory or performance constraints."
+    ],
+    "Technopreneurship & Product": [
+        "Pitch a technical solution for a real-world logistics problem, such as a real-time fleet management system. How do you assess its market feasibility?",
+        "Tell me about a time you had to define the scope, timeline, and Gantt chart for a new software product.",
+        "If you were leading a team to build an AI-powered educational tool, how would you prioritize which features to build first for the prototype?"
+    ],
+    "Data & AI": [
+        "Describe your process for building a custom dataset from scratch, such as capturing specific visual frames or micro-expressions.",
+        "How do you ensure data quality and handle edge cases when training a machine learning model on a small dataset?"
+    ]
+};
 
+type TrackName = keyof typeof INTERVIEW_TRACKS;
+const TRACK_NAMES = Object.keys(INTERVIEW_TRACKS) as TrackName[];
 const MAX_FOLLOW_UP_TURNS = 3;
 
 // ──────────────────────────────────────────────────────────────
@@ -192,11 +211,22 @@ export default function InterviewSimulator() {
     const searchParams = useSearchParams();
     const router = useRouter();
 
-    // Derive initial question — supports ?q= from the Retake button on history page
+    // Derive initial question & track — supports ?q= from the Retake button on history page
     const retakeQuestion = searchParams.get("q");
-    const initialIndex = retakeQuestion
-        ? Math.max(QUESTION_BANK.indexOf(retakeQuestion), 0)
-        : 0;
+
+    let initialTrack: TrackName = "Behavioral";
+    let initialIndex = 0;
+
+    if (retakeQuestion) {
+        for (const track of TRACK_NAMES) {
+            const index = INTERVIEW_TRACKS[track].indexOf(retakeQuestion);
+            if (index !== -1) {
+                initialTrack = track;
+                initialIndex = index;
+                break;
+            }
+        }
+    }
 
     const [response, setResponse] = useState("");
     const [evaluation, setEvaluation] = useState<Evaluation | null>(null);
@@ -204,8 +234,10 @@ export default function InterviewSimulator() {
     const [error, setError] = useState("");
     const [isListening, setIsListening] = useState(false);
     const recognitionRef = useRef<any>(null);
+
+    const [activeTrack, setActiveTrack] = useState<TrackName>(initialTrack);
     const [questionIndex, setQuestionIndex] = useState(initialIndex);
-    const currentQuestion = QUESTION_BANK[questionIndex];
+    const currentQuestion = INTERVIEW_TRACKS[activeTrack][questionIndex];
 
     // Follow-up conversation state
     const [followUpMode, setFollowUpMode] = useState(false);
@@ -260,7 +292,7 @@ export default function InterviewSimulator() {
     }, []);
 
     const handleShuffle = () => {
-        setQuestionIndex((prev) => (prev + 1) % QUESTION_BANK.length);
+        setQuestionIndex((prev) => (prev + 1) % INTERVIEW_TRACKS[activeTrack].length);
         setResponse("");
         setEvaluation(null);
         setError("");
@@ -429,10 +461,30 @@ export default function InterviewSimulator() {
 
                 {/* Question Card */}
                 <section className="bg-white/80 backdrop-blur-md border border-white p-8 rounded-[32px] shadow-xl shadow-slate-200/50 mb-8 relative">
-                    <div className="flex items-center gap-2 mb-4">
-                        <span className="h-2 w-2 bg-indigo-500 rounded-full animate-pulse" />
-                        <span className="text-[10px] font-black text-indigo-500 uppercase tracking-widest">Active Challenge</span>
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+                        <div className="flex items-center gap-2">
+                            <span className="h-2 w-2 bg-indigo-500 rounded-full animate-pulse" />
+                            <span className="text-[10px] font-black text-indigo-500 uppercase tracking-widest">Active Challenge</span>
+                        </div>
+
+                        {/* Track Selector Dropdown */}
+                        <select
+                            value={activeTrack}
+                            onChange={(e) => {
+                                setActiveTrack(e.target.value as TrackName);
+                                setQuestionIndex(0);
+                                setResponse("");
+                                setEvaluation(null);
+                                resetConversationState();
+                            }}
+                            className="bg-slate-50 border border-slate-200 text-slate-700 text-sm font-bold rounded-xl px-4 py-2 outline-none focus:ring-2 focus:ring-indigo-500/20 cursor-pointer hover:bg-slate-100 transition-colors"
+                        >
+                            {TRACK_NAMES.map(track => (
+                                <option key={track} value={track}>{track} Track</option>
+                            ))}
+                        </select>
                     </div>
+
                     <h2 className="text-2xl font-bold text-slate-800 leading-snug mb-6">{currentQuestion}</h2>
                     <button
                         onClick={handleShuffle}
@@ -486,7 +538,7 @@ export default function InterviewSimulator() {
                     </div>
                 )}
 
-                {/* ── AI Analysis Loading Shimmer (UX Fix K) ── */}
+                {/* ── AI Analysis Loading Shimmer ── */}
                 {loading && (
                     <div className="space-y-6 animate-in fade-in duration-300">
                         <AnalysisLoadingSkeleton />
@@ -504,7 +556,6 @@ export default function InterviewSimulator() {
                                 <h2 className="text-white text-3xl font-black flex items-center gap-3">
                                     <span className="text-indigo-400 italic">#</span> Performance Report
                                 </h2>
-                                {/* UX Fix I: Copy to Clipboard */}
                                 <CopyButton text={copyText} />
                             </div>
 
